@@ -1,0 +1,87 @@
+# Fikua Lab Wallet Attestations — deployment
+#
+# Image: docker.io/fikua/fikua-lab-wallet-attestations (published by the
+# fikua/fikua-lab-wallet-attestations repo's release.yml on every
+# published release / push to main).
+#
+# Source of truth for this file:
+#   fikua-platform-iac/projects/fikua-lab-wallet-attestations/compose.yaml
+#
+# A copy travels with the app repo at
+# fikua-lab-wallet-attestations/compose.yaml so deploy.yml can push it to
+# the host on every deploy — keep both in sync (same convention as
+# fikua-lab-issuer / fikua-lab-idp).
+#
+# Host path on the VPS: /opt/vps/projects/fikua-lab-wallet-attestations/
+#
+# Stateless — no database, no local signing key on disk. Every WIA is
+# signed via the Fikua DSS (CSC v2.0), so there is nothing to persist or
+# bind-mount here beyond the .env file. Same deployment shape as
+# fikua-lab-issuer/fikua-lab-idp otherwise: direct hostname -> Traefik ->
+# container, no Tunnel, no Cloudflare Access, no Worker in front.
+
+services:
+  fikua-lab-wallet-attestations:
+    image: ${DOCKER_REGISTRY:-fikua}/fikua-lab-wallet-attestations:${WALLET_ATTESTATIONS_VERSION:-latest}
+    container_name: fikua-lab-wallet-attestations
+    restart: unless-stopped
+    environment:
+      # This Wallet Provider's own identifier — the `iss` of every WIA
+      # it issues.
+      FIKUA_BASE_URL: ${FIKUA_BASE_URL:-https://wallet-attestations.fikua.com}
+      # Every WIA is signed via the Fikua DSS, not a local key — see
+      # internal/walletprovider/signingkey.go's doc comment for why: an
+      # Issuer decides whether to trust a wallet instance it has never
+      # seen before based on this signature, which needs a real
+      # certificate behind it, not a throwaway key. There is no
+      # local-key fallback and no ephemeral key — a misconfigured or
+      # unreachable DSS fails this service at boot.
+      FIKUA_DSS_URL: ${FIKUA_DSS_URL:-https://dss.fikua.com}
+      FIKUA_DSS_CLIENT_ID: ${FIKUA_DSS_CLIENT_ID:-fikua-wallet-provider}
+      FIKUA_DSS_CLIENT_SECRET: ${FIKUA_DSS_CLIENT_SECRET:?FIKUA_DSS_CLIENT_SECRET must be set in .env}
+      FIKUA_DSS_WALLET_PROVIDER_CREDENTIAL_ID: ${FIKUA_DSS_WALLET_PROVIDER_CREDENTIAL_ID:-fikua-wallet-provider-001}
+      FIKUA_DSS_CREDENTIAL_PASSWORD: ${FIKUA_DSS_CREDENTIAL_PASSWORD:?FIKUA_DSS_CREDENTIAL_PASSWORD must be set in .env}
+    networks:
+      - traefik-public
+    labels:
+      # DNS-only A record (not Cloudflare-proxied) -> Traefik websecure
+      # (443) directly — same rationale as fikua-lab-issuer/idp: keeps
+      # Traefik negotiating TLS directly, matching this ecosystem's
+      # other conformance-relevant endpoints. tls.certresolver explicit,
+      # not left to the entryPoint's own wildcard default (see
+      # fikua-lab-issuer's compose.yaml comment for the DEFAULT CERT trap
+      # that caused there).
+      traefik.enable: "true"
+      traefik.http.routers.fikua-lab-wallet-attestations.rule: "Host(`wallet-attestations.fikua.com`)"
+      traefik.http.routers.fikua-lab-wallet-attestations.entrypoints: "websecure"
+      traefik.http.routers.fikua-lab-wallet-attestations.tls: "true"
+      traefik.http.routers.fikua-lab-wallet-attestations.tls.certresolver: "cloudflare"
+      traefik.http.routers.fikua-lab-wallet-attestations.service: "fikua-lab-wallet-attestations"
+      traefik.http.services.fikua-lab-wallet-attestations.loadbalancer.server.port: "8080"
+      # Rate limit: mirrors fikua-lab-issuer/idp.
+      # sourcecriterion.requestheadername is REQUIRED — without it the
+      # limiter sees rotating Cloudflare edge IPs (the ratelimit
+      # middleware runs before the forwardedHeaders/X-Forwarded-For
+      # rewrite) and never fires.
+      traefik.http.routers.fikua-lab-wallet-attestations.middlewares: "fikua-lab-wallet-attestations-ratelimit"
+      traefik.http.middlewares.fikua-lab-wallet-attestations-ratelimit.ratelimit.average: "60"
+      traefik.http.middlewares.fikua-lab-wallet-attestations-ratelimit.ratelimit.period: "1m"
+      traefik.http.middlewares.fikua-lab-wallet-attestations-ratelimit.ratelimit.burst: "100"
+      traefik.http.middlewares.fikua-lab-wallet-attestations-ratelimit.ratelimit.sourcecriterion.requestheadername: "Cf-Connecting-Ip"
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.5'
+    logging:
+      driver: json-file
+      options:
+        max-size: "25m"
+        max-file: "3"
+
+networks:
+  # Shared L7 fabric owned by platform-services — joined for Traefik
+  # routing.
+  traefik-public:
+    name: traefik-public
+    external: true
