@@ -10,10 +10,17 @@ import (
 	cscclient "github.com/fikua/fikua-dss-csc-client-go"
 	"github.com/fikua/fikua-lab-wallet-attestations/internal/config"
 	"github.com/fikua/fikua-lab-wallet-attestations/internal/httpapi"
+	"github.com/fikua/fikua-lab-wallet-attestations/internal/telemetry"
 	"github.com/fikua/fikua-lab-wallet-attestations/internal/walletprovider"
 )
 
 func main() {
+	shutdownTelemetry, telErr := telemetry.Setup(context.Background(), "fikua-lab-wallet-attestations")
+	if telErr != nil {
+		log.Fatalf("telemetry: %v", telErr)
+	}
+	defer func() { _ = shutdownTelemetry(context.Background()) }()
+
 	cfg := config.Load()
 
 	signingKey, err := loadSigningKey(cfg)
@@ -28,7 +35,7 @@ func main() {
 	httpapi.NewHandler(service).Routes(mux)
 
 	log.Printf("fikua-lab-wallet-attestations listening on %s (iss=%s)", cfg.Addr, cfg.BaseURL)
-	if err := http.ListenAndServe(cfg.Addr, httpapi.WithCORS(mux)); err != nil {
+	if err := http.ListenAndServe(cfg.Addr, telemetry.HTTPHandler(httpapi.WithCORS(mux))); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/fikua/fikua-lab-wallet-attestations/internal/audit"
 	"github.com/fikua/fikua-lab-wallet-attestations/internal/walletprovider"
 )
 
@@ -36,15 +37,18 @@ func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) issueWIA(w http.ResponseWriter, r *http.Request) {
 	var req walletprovider.IssueWIARequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		audit.Rejected(r.Context(), "invalid_json")
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
 		return
 	}
 
 	result, err := h.walletProvider.IssueWIA(req)
 	if err != nil {
+		audit.Rejected(r.Context(), "invalid_request")
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+	audit.WIAIssued(r.Context(), result.KeyThumbprint)
 	writeJSON(w, http.StatusOK, result)
 }
 

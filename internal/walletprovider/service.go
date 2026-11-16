@@ -21,6 +21,8 @@
 package walletprovider
 
 import (
+	"crypto"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -60,6 +62,9 @@ type IssueWIARequest struct {
 type IssueWIAResult struct {
 	WIA       string `json:"wia"`
 	ExpiresIn int64  `json:"expires_in"`
+	// KeyThumbprint is the RFC 7638 thumbprint of the bound key, for the
+	// audit event; never sent to the wallet.
+	KeyThumbprint string `json:"-"`
 }
 
 // IssueWIA signs and returns a Wallet Instance Attestation for req.
@@ -111,7 +116,12 @@ func (s *Service) IssueWIA(req IssueWIARequest) (IssueWIAResult, error) {
 		return IssueWIAResult{}, err
 	}
 
-	return IssueWIAResult{WIA: string(signed), ExpiresIn: int64(s.ttl.Seconds())}, nil
+	thumbprint, err := holderKey.Thumbprint(crypto.SHA256)
+	if err != nil {
+		return IssueWIAResult{}, err
+	}
+	return IssueWIAResult{WIA: string(signed), ExpiresIn: int64(s.ttl.Seconds()),
+		KeyThumbprint: base64.RawURLEncoding.EncodeToString(thumbprint)}, nil
 }
 
 // AttestationStatus is the response body for GET /attestation/status.
