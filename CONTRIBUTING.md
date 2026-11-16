@@ -10,8 +10,9 @@
 
 ## Versioning
 
-Tagged releases (`vX.Y.Z`) trigger `release.yml`, which builds and
-publishes `fikua/fikua-lab-wallet-attestations` to Docker Hub.
+Releases (`gh release create vX.Y.Z`) trigger `ci.yml`, which publishes
+`ghcr.io/fikua/fikua-lab-wallet-attestations:X.Y.Z`. Deploying it is a
+Dependabot pull request in `fikua-platform-iac` (fikua-docs ADR 0019).
 
 ## Reporting issues
 
