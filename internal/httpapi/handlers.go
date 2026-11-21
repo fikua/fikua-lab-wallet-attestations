@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/fikua/fikua-lab-wallet-attestations/internal/audit"
+	"github.com/fikua/fikua-lab-wallet-attestations/internal/health"
 	"github.com/fikua/fikua-lab-wallet-attestations/internal/walletprovider"
 )
 
@@ -31,7 +32,7 @@ func (h *Handler) Routes(mux *http.ServeMux) {
 }
 
 func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	health.Handler("", nil)(w, r)
 }
 
 func (h *Handler) issueWIA(w http.ResponseWriter, r *http.Request) {

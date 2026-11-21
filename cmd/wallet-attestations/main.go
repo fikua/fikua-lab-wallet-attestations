@@ -6,15 +6,20 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 
 	cscclient "github.com/fikua/fikua-dss-csc-client-go"
 	"github.com/fikua/fikua-lab-wallet-attestations/internal/config"
+	"github.com/fikua/fikua-lab-wallet-attestations/internal/health"
 	"github.com/fikua/fikua-lab-wallet-attestations/internal/httpapi"
 	"github.com/fikua/fikua-lab-wallet-attestations/internal/telemetry"
 	"github.com/fikua/fikua-lab-wallet-attestations/internal/walletprovider"
 )
 
 func main() {
+	if health.IsHealthcheck() {
+		os.Exit(health.Probe(config.ListenAddr()))
+	}
 	shutdownTelemetry, telErr := telemetry.Setup(context.Background(), "fikua-lab-wallet-attestations")
 	if telErr != nil {
 		log.Fatalf("telemetry: %v", telErr)

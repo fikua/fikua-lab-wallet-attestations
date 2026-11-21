@@ -37,7 +37,7 @@ type Config struct {
 // where unset.
 func Load() Config {
 	return Config{
-		Addr:                          getenv("ADDR", ":8080"),
+		Addr:                          ListenAddr(),
 		BaseURL:                       getenv("FIKUA_BASE_URL", "https://wallet-attestations.fikua.com"),
 		WIATTL:                        24 * time.Hour,
 		DSSURL:                        getenv("FIKUA_DSS_URL", ""),
@@ -47,6 +47,9 @@ func Load() Config {
 		DSSCredentialPassword:         getenv("FIKUA_DSS_CREDENTIAL_PASSWORD", ""),
 	}
 }
+
+// ListenAddr is the address the server listens on (ADDR, default :8080).
+func ListenAddr() string { return getenv("ADDR", ":8080") }
 
 func getenv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
